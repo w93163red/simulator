@@ -22,6 +22,7 @@ int M;
 double u;
 double max_rate = 0;
 int cache_size = 64;
+
 class Task
 {
 public:
@@ -31,6 +32,29 @@ public:
 	unordered_set<int> ECB;
 	Task(int p, double cc) : period(p), c(cc) {}
 };
+
+unordered_set<int> Intersection(unordered_set<int> a, unordered_set<int> b)
+{
+	if (a.size() > b.size()) return Intersection(b, a);
+	unordered_set<int> res;
+	for (int n : a)
+	{
+		if (b.find(n) != b.end())
+			res.insert(n);
+	}
+	return res;
+}
+
+unordered_set<int> Union(unordered_set<int> a, unordered_set<int> b)
+{
+	unordered_set<int> res;
+	for (int n : a)
+		res.insert(n);
+	for (int n : b)
+		res.insert(n);
+	return res;
+}
+
 
 bool comp(Task a, Task b)
 {
