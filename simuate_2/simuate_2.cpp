@@ -33,29 +33,6 @@ public:
 	Task(int p, double cc) : period(p), c(cc) {}
 };
 
-unordered_set<int> Intersection(unordered_set<int> a, unordered_set<int> b)
-{
-	if (a.size() > b.size()) return Intersection(b, a);
-	unordered_set<int> res;
-	for (int n : a)
-	{
-		if (b.find(n) != b.end())
-			res.insert(n);
-	}
-	return res;
-}
-
-unordered_set<int> Union(unordered_set<int> a, unordered_set<int> b)
-{
-	unordered_set<int> res;
-	for (int n : a)
-		res.insert(n);
-	for (int n : b)
-		res.insert(n);
-	return res;
-}
-
-
 bool comp(Task a, Task b)
 {
 	return a.period > b.period;
@@ -149,14 +126,78 @@ double cal_DBF_Ju(vector<Task> task_list, int T)
 		{
 			if (task_list[i].period > task_list[j].period)
 			{
-				
+				vector<int> v(128);
+				vector<int>::iterator it;
+				it = set_intersection(task_list[i].UCB.begin(), task_list[i].UCB.end(),
+					task_list[j].ECB.begin(), task_list[j].ECB.end(), v.begin());
+				v.resize(it - v.begin());
+				gamma += max((double)0.0, ceil((double)(task_list[i].period - task_list[j].period) / (double)task_list[j].period)) 
+					* v.size();
 			}
 		}
+		gamma *= BRT;
+		sum += max((double)0.0, floor((double)(T - task_list[i].period) / (double)task_list[i].period)) * gamma;
 	}
-
-	
+	return sum;
 }
 
+double cal_DBF_combined(vector<Task> task_list, double &ECB, double &UCB, int T)
+{
+	double sum = 0;
+
+	//ECB, UCB
+	for (int i = task_list.size() - 1; i >= 0; i--)
+	{
+		if (task_list[i].period >= T)
+			continue;
+		double gamma = 0;
+		long times;
+		unordered_multiset<int> res;
+		unordered_multiset<int> UCB_res;
+		vector<int> v(128);
+		vector<int>::iterator it;
+		for (int k = 0; k < i; k++)
+		{
+			times = max(0.0, ceil((task_list[k].period - task_list[i].period) / task_list[i].period)) *
+				max(0.0, 1 + floor((T - task_list[i].period) / task_list[i].period));
+			unordered_set<int> med;
+			for (int h = i; h < task_list.size(); h++)
+			{
+				v.clear();
+				it = set_union(med.begin(), med.end(), task_list[h].ECB.begin(), task_list[h].ECB.end(), v.begin());
+				v.resize(it - v.begin());
+				med.clear();
+				med = unordered_set<int>(v.begin(), v.end());
+			}
+			v.clear();
+			it = set_intersection(task_list[k].UCB.begin(), task_list[k].UCB.end(), med.begin(), med.end(), v.begin());
+			v.resize(it - v.begin());
+			for(int n: med)
+				for (int ii = 0; ii < times; ii++)
+				{
+					res.insert(n);
+				}
+			for (int n: task_list[k].UCB)
+				for (int ii = 0; ii < times; ii++)
+				{
+					UCB_res.insert(n);
+				}
+		}
+		times = max(0.0, 1 + floor((T - task_list[i].period) / task_list[i].period));
+		unordered_multiset<int> ECB_res;
+		for(int n: task_list[i].ECB)
+			for (int ii = 0; ii < times; ii++)
+			{
+				ECB_res.insert(n);
+			}
+		int L = max(0.0, 1 + floor((T - task_list[i].period) / task_list[i].period));
+		gamma = BRT * L * res.size();
+		ECB += gamma;
+
+	}
+
+
+}
 
 int main()
 {
@@ -206,7 +247,7 @@ int main()
 					double DBF = cal_DBF(taskset, T);
 					double DBF_Ju;
 					if (DBF_Ju_pass)
-						DBF_Ju = cal_DBF_Ju(taskset, DBF, T);
+						DBF_Ju = cal_DBF_Ju(taskset, T);
 					double DBF_combined;
 					if (DBF_combined_pass)
 						DBF_combined = cal_DBF_combined(taskset, ecb, ucb, T);
@@ -220,7 +261,7 @@ int main()
 						DBF_pass = false;
 						//cout << "DBF: " << DBF << " " << T << endl;
 					}
-					if (DBF_Ju_pass && DBF_Ju > M*T)
+					if (DBF_Ju_pass && DBF_Ju + DBF > M*T)
 					{
 						DBF_Ju_pass = false;
 						//cout << "DBF_Ju: " << DBF_Ju << " " << T << endl;
