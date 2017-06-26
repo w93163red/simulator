@@ -6,7 +6,7 @@
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
-#include <unordered_set>
+#include <set>
 #include <vector>
 #include <algorithm>
 #include <map>
@@ -28,8 +28,8 @@ class Task
 public:
 	int period;
 	double c;
-	unordered_set<int> UCB;
-	unordered_set<int> ECB;
+	set<int> UCB;
+	set<int> ECB;
 	Task(int p, double cc) : period(p), c(cc) {}
 };
 
@@ -152,24 +152,24 @@ double cal_DBF_combined(vector<Task> task_list, double &ECB, double &UCB, int T)
 			continue;
 		double gamma = 0;
 		long times;
-		unordered_multiset<int> res;
-		unordered_multiset<int> UCB_res;
+		multiset<int> res;
+		multiset<int> UCB_res;
 		vector<int> v(128);
 		vector<int>::iterator it;
 		for (int k = 0; k < i; k++)
 		{
 			times = max(0.0, ceil((task_list[k].period - task_list[i].period) / task_list[i].period)) *
 				max(0.0, 1 + floor((T - task_list[i].period) / task_list[i].period));
-			unordered_set<int> med;
+			set<int> med;
 			for (int h = i; h < task_list.size(); h++)
 			{
-				v.clear();
+				v = vector<int>(128);
 				it = set_union(med.begin(), med.end(), task_list[h].ECB.begin(), task_list[h].ECB.end(), v.begin());
 				v.resize(it - v.begin());
 				med.clear();
-				med = unordered_set<int>(v.begin(), v.end());
+				med = set<int>(v.begin(), v.end());
 			}
-			v.clear();
+			v = vector<int>(128);
 			it = set_intersection(task_list[k].UCB.begin(), task_list[k].UCB.end(), med.begin(), med.end(), v.begin());
 			v.resize(it - v.begin());
 			for(int n: med)
@@ -183,20 +183,28 @@ double cal_DBF_combined(vector<Task> task_list, double &ECB, double &UCB, int T)
 					UCB_res.insert(n);
 				}
 		}
-		times = max(0.0, 1 + floor((T - task_list[i].period) / task_list[i].period));
-		unordered_multiset<int> ECB_res;
-		for(int n: task_list[i].ECB)
-			for (int ii = 0; ii < times; ii++)
+		int L = max(0.0, 1 + floor((T - task_list[i].period) / task_list[i].period));
+		ECB += BRT * L * res.size();
+
+		multiset<int> ECB_res;
+		for (int n : task_list[i].ECB)
+			for (int ii = 0; ii < L; ii++)
 			{
 				ECB_res.insert(n);
 			}
-		int L = max(0.0, 1 + floor((T - task_list[i].period) / task_list[i].period));
-		gamma = BRT * L * res.size();
-		ECB += gamma;
+		v = vector<int>(128);
+		it = set_intersection(UCB_res.begin(), UCB_res.end(), ECB_res.begin(), ECB_res.end(), v.begin());
+		v.resize(it - v.begin());
+		UCB += BRT * v.size();
 
+		sum += min(ECB, UCB);
 	}
+	return sum;
+}
 
-
+double cal_DBF_condensed(vector<Task> task_list, int T)
+{
+	return 0;
 }
 
 int main()
@@ -208,7 +216,7 @@ int main()
 	random_device rd;
 	mt19937 rng(rd());
 	uniform_int_distribution<int> uni(0, 10);
-	vector<int> kernel = { 8 };
+	vector<int> kernel = { 2 };
 	//Generate Taskset	
 	for (int M : kernel)
 	{
@@ -230,7 +238,7 @@ int main()
 				for (int j = 0; j < periods[i].size(); j++)
 				{
 					Task t(periods[i][j], (double)utils[i][j] * (double)periods[i][j]);
-					for (int k = i * 8; k < (i + 1) * 8; k++)
+					for (int k = j * 8; k < (j + 1) * 8; k++)
 					{
 						t.UCB.insert(k % cache_size);
 					}
