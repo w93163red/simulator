@@ -21,7 +21,7 @@ double BRT = 0.008;
 int M;
 double u;
 double max_rate = 0;
-int cache_size = 64;
+int cache_size = 32;
 
 class Task
 {
@@ -88,7 +88,7 @@ vector<vector<int>> periods_generator(int n, int nsets)
 	vector<vector<int>> ans;
 
 	default_random_engine generator;
-	uniform_int_distribution<int> distribution(1, 4);
+	uniform_int_distribution<int> distribution(1, 3);
 
 	for (int i = 0; i < nsets; i++)
 	{
@@ -172,11 +172,10 @@ double cal_DBF_combined(vector<Task> task_list, double &ECB, double &UCB, int T)
 			v = vector<int>(128);
 			it = set_intersection(task_list[k].UCB.begin(), task_list[k].UCB.end(), med.begin(), med.end(), v.begin());
 			v.resize(it - v.begin());
-			for(int n: med)
-				for (int ii = 0; ii < times; ii++)
-				{
-					res.insert(n);
-				}
+			for (int ii = 0; ii < times; ii++)
+			{
+				res.insert(v.size());
+			}
 			for (int n: task_list[k].UCB)
 				for (int ii = 0; ii < times; ii++)
 				{
@@ -184,8 +183,14 @@ double cal_DBF_combined(vector<Task> task_list, double &ECB, double &UCB, int T)
 				}
 		}
 		int L = max(0.0, 1 + floor((T - task_list[i].period) / task_list[i].period));
-		ECB += BRT * L * res.size();
-
+		int j = 0;
+		multiset<int>::reverse_iterator rit = res.rbegin();
+		while (res.size() > L && j < L)
+		{
+			ECB += *rit * BRT;
+			rit++;
+			j++;
+		}
 		multiset<int> ECB_res;
 		for (int n : task_list[i].ECB)
 			for (int ii = 0; ii < L; ii++)
@@ -204,7 +209,70 @@ double cal_DBF_combined(vector<Task> task_list, double &ECB, double &UCB, int T)
 
 double cal_DBF_condensed(vector<Task> task_list, int T)
 {
-	return 0;
+	double sum = 0;
+	double ECB = 0;
+	double UCB = 0;
+	//ECB, UCB
+	for (int i = task_list.size() - 1; i >= 0; i--)
+	{
+		if (task_list[i].period >= T)
+			continue;
+		double gamma = 0;
+		long times;
+		multiset<int> res;
+		multiset<int> UCB_res;
+		vector<int> v(128);
+		vector<int>::iterator it;
+		for (int k = 0; k < i; k++)
+		{
+			times = max(0.0, ceil((task_list[k].period - task_list[i].period) / task_list[i].period)) *
+				max(0.0, 1 + floor((T - task_list[i].period) / task_list[i].period));
+			if (k > task_list.size() - M) continue;
+			set<int> med;
+			for (int h = i; h < task_list.size(); h++)
+			{
+				v = vector<int>(128);
+				it = set_union(med.begin(), med.end(), task_list[h].ECB.begin(), task_list[h].ECB.end(), v.begin());
+				v.resize(it - v.begin());
+				med.clear();
+				med = set<int>(v.begin(), v.end());
+			}
+			v = vector<int>(128);
+			it = set_intersection(task_list[k].UCB.begin(), task_list[k].UCB.end(), med.begin(), med.end(), v.begin());
+			v.resize(it - v.begin());
+			for (int ii = 0; ii < times; ii++)
+			{
+				res.insert(v.size());
+			}
+			for (int n : task_list[k].UCB)
+				for (int ii = 0; ii < times; ii++)
+				{
+					UCB_res.insert(n);
+				}
+		}
+		int L = max(0.0, 1 + floor((T - task_list[i].period) / task_list[i].period));
+		int j = 0;
+		multiset<int>::reverse_iterator rit = res.rbegin();
+		while (res.size() > L && j < L)
+		{
+			ECB += *rit * BRT;
+			rit++;
+			j++;
+		}
+		multiset<int> ECB_res;
+		for (int n : task_list[i].ECB)
+			for (int ii = 0; ii < L; ii++)
+			{
+				ECB_res.insert(n);
+			}
+		v = vector<int>(128);
+		it = set_intersection(UCB_res.begin(), UCB_res.end(), ECB_res.begin(), ECB_res.end(), v.begin());
+		v.resize(it - v.begin());
+		UCB += BRT * v.size();
+
+		sum += min(ECB, UCB) - M * BRT * 8;
+	}
+	return sum;
 }
 
 int main()
@@ -212,15 +280,15 @@ int main()
 	ofstream myfile;
 	myfile.open("result.txt");
 	int n = 12;
-	int nsets = 100;
+	int nsets = 20;
 	random_device rd;
 	mt19937 rng(rd());
 	uniform_int_distribution<int> uni(0, 10);
-	vector<int> kernel = { 2 };
+	vector<int> kernel = { 4 };
 	//Generate Taskset	
 	for (int M : kernel)
 	{
-		for (u = 0.5; u < M*1.0; u += 0.1*M / 2)
+		for (u = 3.74; u < M*1.0; u += 0.04)
 		{
 			BRT = 0.008;
 			vector<vector<double>> utils = UUniFastDiscard(n, u, nsets);
@@ -274,21 +342,21 @@ int main()
 						DBF_Ju_pass = false;
 						//cout << "DBF_Ju: " << DBF_Ju << " " << T << endl;
 					};
-					if (ECB_pass > M*T)
+					if (ECB_pass && ecb + DBF > M*T)
 					{
 						ECB_pass = false;
 						//cout << "ECB: " << ecb << " " << T << endl;
 					}
-					if (ucb_pass > M*T) {
+					if (ucb_pass && ucb + DBF > M*T) {
 						ucb_pass = false;
 						//cout << "UCB: " << ucb << " " << T << endl;
 					}
-					if (DBF_combined_pass && DBF_combined > M*T)
+					if (DBF_combined_pass && DBF_combined + DBF > M*T)
 					{
 						DBF_combined_pass = false;
 						//cout << "COMBINED: " << DBF_combined << " " << T << endl;
 					}
-					if (DBF_condensed_pass && DBF_condensed > M*T)
+					if (DBF_condensed_pass && DBF_condensed + DBF > M*T)
 					{
 						DBF_condensed_pass = false;
 						//cout << "DBF_Condensed: " << DBF_condensed << " " << T << endl;
